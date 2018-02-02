@@ -1,0 +1,213 @@
+---
+title: "Linear Regression - Intro Data Science Project"
+author: "Carl Larson"
+date: "2/1/2018"
+output: pdf_document
+---
+
+
+For this project we are applying Linear Regression analysis to the "states.rds" data set as follows.
+
+```{r}
+states.data <- readRDS("/Users/EagleFace/Documents/!linear_regression/dataSets/states.rds")
+states.info <- data.frame(attributes(states.data)[c("names", "var.labels")])
+head(states.info, 12)
+tail(states.info, 12)
+```
+
+```{r}
+sts.ex.sat <- subset(states.data, select = c("expense", "csat"))
+summary(sts.ex.sat)
+cor(sts.ex.sat)
+```
+
+This is registering some interesting data. 
+
+```{r}
+plot(sts.ex.sat)
+```
+
+This looks like a very loose negative correlation, possibly something roughly to the tune of y = (-0.4x^-0.4)+1400. 
+This does strike me as a negative square root type shape of line-of-best-fit, but still it's hard to correlate anything to this dataset as it has a low R-squared value no matter how you draw a line through this set.
+
+```{r}
+#Fitting the regression model
+
+sat.mod <- lm(csat ~ expense, #apparent regression formula
+              data=states.data) #data set of focus
+
+#Opening up a view of the results
+summary(sat.mod)
+```
+
+It seems that the more people spend on their SAT prep, actually the worse off they do. Could this be an indictment of the SAT prep industry? 
+
+```{r}
+summary(lm(csat ~ expense + percent, data = states.data))
+
+class(sat.mod)
+names(sat.mod)
+methods(class = class(sat.mod))[1:9]
+
+confint(sat.mod)
+
+hist(residuals(sat.mod))
+
+
+```
+
+Since ordinary least squares regression requires a number of assumptions we can apply to the following visualizations.
+
+```{r}
+par(mar = c(4, 4, 2, 2), mfrow = c(1, 2))
+plot(sat.mod, which = c(1, 2))
+
+#Next we are comparing models, asking if congressional voting pattern could be
+#a better predictor than expense, and expense wasn't very good so it's likely. 
+
+#Below fits a new model adding house and senate as predictors
+sat.voting.mod <- lm(csat ~ expense + house + senate,
+                     data = na.omit(states.data))
+
+anova(sat.mod, sat.voting.mod)
+coef(summary(sat.voting.mod))
+```
+
+These also look like pretty rough, low correlations. 
+
+We are next asked to plot our own model using the percentage of residents living in metropolitan areas to predict energy consumed per capita. 
+
+```{r}
+nrg.ex.dzt <- subset(states.data, select = c("density", "energy"))
+
+summary(nrg.ex.dzt)
+cor(nrg.ex.dzt)
+
+```
+
+After checking these results, we can try plotting this to see what it looks like on the same graph. 
+
+```{r}
+plot(nrg.ex.dzt)
+```
+
+This actually looks fairly well-correlated. The R-value for a "y=1/x" type algorithm here would fit fairly well and does make sense, as most people are in the middle, and the edges seem roughly normally distributed. 
+
+```{r}
+nrg.mod <- lm(energy ~ density, 
+              data=states.data) 
+
+summary(nrg.mod)
+```
+
+It seems as though the R-squared value is far too low for this to be a viable model for the correlation. This definitely isn't a linear relationship, but there is a correlation between these variables even though the above algorithm isn't seeing it. 
+
+The problem set asks us to add more variables into the equation to see if we can make this more accurate.
+
+After looking back above, the best three other variables to grab would be
+
+- miles (the number of per capita miles per year in thousands)
+- green (per capita greenhouse emissions in tons)
+- income 
+
+These should be great indicators for the output variable of energy used. 
+
+```{r}
+best.guess <- subset(states.data, select = c("energy", "density", "miles", "green", "income"))
+summary(best.guess)
+cor(best.guess)
+```
+
+Given this we can try a chart.
+
+```{r}
+plot(best.guess)
+```
+
+```{r}
+best.mod <- lm(energy ~ density + miles + green + income,  
+              data=states.data) 
+
+summary(best.mod)
+```
+
+This time the R-squared is up at about 0.6, which is a lot better than the 0.08 last time. I would say this does represent a significant improvement, while showing it's still far from perfect, we are getting some signal out of the noise here. 
+
+##Modeling Interactions and Factors
+
+
+
+
+```{r}
+sat.expense.by.percent <- lm(csat ~ expense*income,
+                             data=states.data)
+
+coef(summary(sat.expense.by.percent))
+```
+
+
+Next we are asked to try to predict SAT scores from region. 
+
+```{r}
+#Saving this as a string and factor to be safe
+str(states.data$region)
+states.data$region <- factor(states.data$region)
+
+#Below we try the next model
+
+sat.region <- lm(csat ~ region,
+  data=states.data)
+
+#This model's results are below
+coef(summary(sat.region))
+anova(sat.region)
+plot(sat.region)
+```
+
+It doesn't look like we are getting significant results at all by region. 
+
+```{r}
+#Prints default contrasts
+contrasts(states.data$region)
+
+coef(summary(lm(csat ~ C(region, base=4),
+                data=states.data)))
+
+#Changes coding scheme
+coef(summary(lm(csat ~ C(region, contr.helmert),
+                data=states.data)))
+```
+
+##1.) Add an interaction to the "energy" regression above
+
+```{r}
+energy.by.green.income <- lm(energy ~ income*green,
+  data=states.data)
+
+coef(summary(energy.by.green.income))
+summary(energy.by.green.income)
+```
+
+This helped, and produced a better R-squared of 6.025.
+
+##2.) Add region to the model
+
+Now we are asked to add region to the model here and see if there are any significant differences in the results between regions in energy usage. 
+
+```{r}
+energy.by.region <- lm(energy ~ income * green * region,
+                       data=states.data)
+
+#Here we can see if throwing in region made our results 
+#clearer or more confusing
+
+coef(summary(energy.by.region))
+summary(energy.by.region)
+
+
+```
+
+Surprisingly enough, the R-squared bumped slightly up to 0.62. It seems this didn't hurt the analysis to include region. 
+
+There do seem to be significant differences across the regions, but that also could change if the regions were drawn differently. 
+
